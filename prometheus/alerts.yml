@@ -1,0 +1,26 @@
+groups:
+  - name: campus
+    rules:
+      - alert: ExporterTargetDown
+        expr: up == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) is down"}
+
+      - alert: DeviceUnreachable
+        expr: campus_device_up == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: "{{ $labels.device }} does not answer {{ $labels.protocol }}"}
+
+      - alert: InterfaceDown
+        expr: campus_device_interface_oper_status == 0
+        for: 30s
+        labels: {severity: major}
+        annotations: {summary: "{{ $labels.device }} interface {{ $labels.interface }} is down"}
+
+      - alert: HighCpuUsage
+        expr: 100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m]))) > 85
+        for: 1m
+        labels: {severity: warning}
+        annotations: {summary: "CPU above 85% on {{ $labels.instance }}"}

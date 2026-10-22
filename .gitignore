@@ -1,0 +1,7 @@
+test-results/
+diagnostics-*.txt
+__pycache__/
+*.pyc
+.env
+opennms/overlay/*
+!opennms/overlay/.gitkeep

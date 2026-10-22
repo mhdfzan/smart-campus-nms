@@ -1,0 +1,24 @@
+# Devices polled by the campus exporter. protocol: restconf | netconf
+devices:
+  - name: edge-router-1
+    protocol: restconf
+    url: http://edge-router-1:8080
+    username: labuser
+    password: labpass
+    verify_tls: false          # lab only; use a CA bundle path or true in production
+
+  - name: edge-router-2
+    protocol: restconf
+    url: http://edge-router-2:8080
+    username: labuser
+    password: labpass
+    verify_tls: false
+
+  # Real NETCONF device example (e.g. Cisco DevNet Always-On IOS XE sandbox).
+  # Uncomment and fill in the credentials from the DevNet sandbox page.
+  # - name: cisco-iosxe-sandbox
+  #   protocol: netconf
+  #   host: sandbox-iosxe-latest-1.cisco.com
+  #   port: 830
+  #   username: developer
+  #   password: "FROM_SANDBOX_PAGE"

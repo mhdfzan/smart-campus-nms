@@ -1,0 +1,151 @@
+name: smart-campus-nms
+
+networks:
+  campus:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  pgdata:
+  onms-data:
+  prom-data:
+  grafana-data:
+
+x-snmp-device: &snmp-device
+  build: ./devices/snmp-device
+  restart: unless-stopped
+
+services:
+  # ================= MONITORING SERVER =================
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      retries: 20
+    networks: [campus]
+
+  opennms:
+    image: opennms/horizon:${OPENNMS_VERSION:-36.0.5}   # override with: OPENNMS_VERSION=<tag> docker compose up -d
+    command: ["-s"]
+    depends_on:
+      db: {condition: service_healthy}
+    environment:
+      TZ: Asia/Kolkata
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      OPENNMS_DBNAME: opennms
+      OPENNMS_DBUSER: opennms
+      OPENNMS_DBPASS: opennms
+    cap_add: [NET_RAW]
+    sysctls:
+      net.ipv4.ping_group_range: "0 429496729"
+    ports: ["8980:8980"]
+    volumes:
+      - onms-data:/opt/opennms-data
+      - ./opennms/overlay:/opt/opennms-etc-overlay:ro   # config overrides (see opennms/fast-polling.sh)
+    networks: [campus]
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prom-data:/prometheus
+    ports: ["9090:9090"]
+    networks: [campus]
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    command: ["--path.rootfs=/host"]
+    volumes: ["/:/host:ro"]
+    ports: ["9100:9100"]
+    networks: [campus]
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: campus123
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports: ["3000:3000"]
+    depends_on: [prometheus]
+    networks: [campus]
+
+  # ================= CUSTOM NETCONF/RESTCONF EXPORTER =================
+  campus-exporter:
+    build: ./exporter
+    volumes: ["./exporter/devices.yml:/app/devices.yml:ro"]
+    ports: ["9200:9200"]
+    depends_on: [edge-router-1, edge-router-2]
+    networks: [campus]
+
+  # ================= SIMULATED CAMPUS DEVICES (SNMP) =================
+  core-router:
+    <<: *snmp-device
+    container_name: core-router
+    hostname: core-router
+    environment:
+      SYS_NAME: core-router
+      SYS_DESCR: "Cisco IOS XE Software, Catalyst 8000V (simulated)"
+      SYS_OID: .1.3.6.1.4.1.9.1.1
+      SYS_LOCATION: "Campus Core"
+    networks: {campus: {ipv4_address: 172.28.0.10}}
+
+  switch-admin:
+    <<: *snmp-device
+    container_name: switch-admin
+    hostname: switch-admin
+    environment:
+      SYS_NAME: switch-admin
+      SYS_DESCR: "Juniper Networks EX4300 Ethernet Switch, JUNOS (simulated)"
+      SYS_OID: .1.3.6.1.4.1.2636.1.1.1.2.1
+      SYS_LOCATION: "Admin Block"
+    networks: {campus: {ipv4_address: 172.28.0.11}}
+
+  switch-academic:
+    <<: *snmp-device
+    container_name: switch-academic
+    hostname: switch-academic
+    environment:
+      SYS_NAME: switch-academic
+      SYS_DESCR: "Arista Networks EOS, DCS-7050 (simulated)"
+      SYS_OID: .1.3.6.1.4.1.30065.1.3011
+      SYS_LOCATION: "Academic Block"
+    networks: {campus: {ipv4_address: 172.28.0.12}}
+
+  dc-server:
+    <<: *snmp-device
+    container_name: dc-server
+    hostname: dc-server
+    environment:
+      SYS_NAME: dc-server
+      SYS_DESCR: "Linux dc-server 6.8.0 Ubuntu 24.04 x86_64 (simulated)"
+      SYS_OID: .1.3.6.1.4.1.8072.3.2.10
+      SYS_LOCATION: "Data Center"
+    networks: {campus: {ipv4_address: 172.28.0.13}}
+
+  # ================= SIMULATED RESTCONF ROUTERS =================
+  edge-router-1:
+    build: ./devices/mock-restconf
+    container_name: edge-router-1
+    environment: {DEVICE_NAME: edge-router-1}
+    networks: {campus: {ipv4_address: 172.28.0.20}}
+    ports: ["8081:8080"]
+
+  edge-router-2:
+    build: ./devices/mock-restconf
+    container_name: edge-router-2
+    environment: {DEVICE_NAME: edge-router-2}
+    networks: {campus: {ipv4_address: 172.28.0.21}}
+    ports: ["8082:8080"]
