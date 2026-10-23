@@ -36,6 +36,7 @@ if [ -z "$(docker compose ps -q 2>/dev/null)" ]; then
   [ -z "$busy" ] || die "These ports are already in use:$busy . Stop whatever uses them (or a previous copy of this project: docker compose down) and retry."
 fi
 
+mkdir -p opennms/overlay   # must exist and be owned by you before Docker mounts it
 say "Building and starting containers (first run: 5-10 minutes)"
 docker compose up -d --build || die "docker compose failed. Scroll up for the first error message."
 

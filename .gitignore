@@ -4,4 +4,4 @@ __pycache__/
 *.pyc
 .env
 opennms/overlay/*
-!opennms/overlay/.gitkeep
+!opennms/overlay/README.txt
